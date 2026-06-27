@@ -8,7 +8,7 @@
 ## 1. Purpose of This Repository
 
 `ai-dev-productivity-kit` is an open-source toolkit for embedding AI into engineering workflows.
-It ships four production-ready layers that teams can adopt individually or together:
+It ships five production-ready layers that teams can adopt individually or together:
 
 | Layer | What it does |
 |---|---|
@@ -16,6 +16,7 @@ It ships four production-ready layers that teams can adopt individually or toget
 | `pr-reviewer/` | Claude-powered GitHub Actions workflow — reviews every PR and posts a comment |
 | `test-gap-detector/` | Detects functions added in a diff that lack corresponding test coverage |
 | `prompt-library/` | Scored, reusable system prompts — evaluated using the SkillOpt method |
+| `prompt-evaluator/` | Scores staged prompt candidates and supports human-controlled promotion |
 
 ---
 
@@ -68,26 +69,41 @@ If you are unsure whether something is a bug, a style preference, or intentional
 ai-dev-productivity-kit/
 ├── AGENTS.md                        ← You are here. Read before acting.
 ├── README.md
+├── .github/
+│   └── workflows/
+│       ├── pr-review.yml            ← GitHub Actions trigger for PR review
+│       ├── test-gap.yml             ← GitHub Actions trigger for test gap detection
+│       ├── prompt-eval.yml          ← Evaluates staged prompt candidates
+│       ├── prompt-compare.yml       ← Posts prompt evaluation comparisons
+│       └── prompt-promote.yml       ← Human-triggered prompt promotion workflow
 ├── pr-reviewer/
 │   ├── review.py                    ← Main PR review script
-│   ├── prompts/
-│   │   └── pr_review_system.md      ← System prompt for PR review agent
-│   └── .github/
-│       └── workflows/
-│           └── pr-review.yml        ← GitHub Actions trigger
+│   └── prompts/
+│       └── pr_review_system.md      ← System prompt for PR review agent
 ├── test-gap-detector/
 │   ├── detect.py                    ← Main test gap detection script
+│   └── prompts/
+│       └── test_gap_system.md       ← System prompt for test gap agent
+├── prompt-evaluator/
+│   ├── evaluate.py                  ← Scores staged prompts against test cases
+│   ├── compare.py                   ← Compares candidate scores to production
+│   ├── promote.py                   ← Promotes staged prompts with --confirm
 │   ├── prompts/
-│   │   └── test_gap_system.md       ← System prompt for test gap agent
-│   └── .github/
-│       └── workflows/
-│           └── test-gap.yml         ← GitHub Actions trigger
+│   │   └── evaluator_system.md      ← System prompt for the critic evaluator
+│   └── test-cases/
+│       ├── pr_review/               ← PR review prompt evaluation cases
+│       └── test_gap/                ← Test gap prompt evaluation cases
 └── prompt-library/
     ├── README.md
+    ├── EVALUATION.md                ← Prompt evaluation methodology
     ├── pr_review_prompt_v1.md       ← Scored prompt: PR review
     ├── test_gap_prompt_v1.md        ← Scored prompt: test gap detection
+    ├── staging/                     ← Human-edited prompt candidates
+    ├── archive/                     ← Archived production prompts
+    ├── failed/                      ← Failed candidate prompt records
+    ├── passed-not-promoted/         ← Passing candidates awaiting human decision
     └── scores/
-        └── eval_results.json        ← SkillOpt evaluation scores
+        └── eval_results.json        ← SkillOpt and evaluator scores
 ```
 
 When you encounter a path not listed above, do not assume it is safe to modify.
@@ -137,6 +153,26 @@ Ask the human engineer for guidance.
 
 **Read-only for agents.** You may reference these prompts but must not modify them.
 Prompt scoring and updates are performed by human maintainers using the SkillOpt evaluation method.
+
+### Layer 5 — Prompt Evaluator (`prompt-evaluator/`)
+
+**Trigger:** Pushes that change `prompt-library/staging/*.md`, plus manual `workflow_dispatch` runs.
+
+**Input scope:** The staged prompt candidate file and the curated test cases under `prompt-evaluator/test-cases/`.
+
+**Output scope:** Evaluation report JSON files under `prompt-library/scores/` and a structured PR comment or workflow summary with the comparison against production.
+
+**Promotion boundary:** The evaluator never modifies production prompts automatically. `promote.py` requires the explicit `--confirm` flag, and the promotion workflow must be human-triggered through `workflow_dispatch`.
+
+**What to evaluate:**
+- Candidate prompt precision, recall, false positive rate, specificity, and consistency
+- Regression risk compared with the current production prompt score
+- Known weaknesses exposed by the curated test cases
+
+**What NOT to do:**
+- Do not promote a prompt based only on an automated score
+- Do not overwrite production prompt files from an evaluation workflow
+- Do not treat evaluator output as an approval or merge decision
 
 ---
 
@@ -225,10 +261,11 @@ This file is versioned alongside the repository. When behavioral rules change:
 - Add a changelog entry.
 - Agents should log which version of `AGENTS.md` they loaded when producing output.
 
-**Current version:** `1.0.0`
+**Current version:** `1.1.0`
 
 | Version | Date | Change |
 |---|---|---|
+| 1.1.0 | 2026-06-27 | Added Layer 5 prompt evaluator structure, scope boundaries, and promotion safety rules |
 | 1.0.0 | 2026-06-25 | Initial release — 4-layer architecture, full behavioral rules |
 
 ---

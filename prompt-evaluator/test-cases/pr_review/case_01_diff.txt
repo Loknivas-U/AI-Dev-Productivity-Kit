@@ -1,0 +1,11 @@
+diff --git a/app/config.py b/app/config.py
+new file mode 100644
+index 0000000..1a2b3c4
+--- /dev/null
++++ b/app/config.py
+@@ -0,0 +1,5 @@
++import os
++
++def get_headers():
++    api_key = "sk_live_51HARD_CODED_EXAMPLE"
++    return {"Authorization": f"Bearer {api_key}"}

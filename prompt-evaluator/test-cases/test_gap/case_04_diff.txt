@@ -1,0 +1,23 @@
+diff --git a/app/formatting.py b/app/formatting.py
+index 1e2f3a4..2f3a4b5 100644
+--- a/app/formatting.py
++++ b/app/formatting.py
+@@ -1,4 +1,6 @@
+ def format_name(first: str, last: str) -> str:
+-    return f"{first} {last}"
++    first_name = first.strip()
++    last_name = last.strip()
++    return f"{first_name} {last_name}"
+diff --git a/tests/test_formatting.py b/tests/test_formatting.py
+index 3a4b5c6..4b5c6d7 100644
+--- a/tests/test_formatting.py
++++ b/tests/test_formatting.py
+@@ -1,5 +1,8 @@
+ from app.formatting import format_name
+ 
+ 
+ def test_format_name():
+     assert format_name("Ada", "Lovelace") == "Ada Lovelace"
++
++def test_format_name_strips_whitespace():
++    assert format_name(" Ada ", " Lovelace ") == "Ada Lovelace"

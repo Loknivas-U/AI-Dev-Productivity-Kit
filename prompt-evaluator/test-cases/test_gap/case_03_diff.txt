@@ -1,0 +1,13 @@
+diff --git a/src/api.js b/src/api.js
+new file mode 100644
+index 0000000..0d1e2f3
+--- /dev/null
++++ b/src/api.js
+@@ -0,0 +1,7 @@
++export async function fetchUser(id) {
++  const response = await fetch(`/api/users/${id}`);
++  if (!response.ok) {
++    throw new Error("Failed to fetch user");
++  }
++  return response.json();
++}

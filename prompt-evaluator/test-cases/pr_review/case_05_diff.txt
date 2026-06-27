@@ -1,0 +1,23 @@
+diff --git a/.github/workflows/comment.yml b/.github/workflows/comment.yml
+new file mode 100644
+index 0000000..6f7a8b9
+--- /dev/null
++++ b/.github/workflows/comment.yml
+@@ -0,0 +1,18 @@
++name: Comment
++
++on:
++  pull_request_target:
++    types: [opened]
++
++jobs:
++  comment:
++    runs-on: ubuntu-latest
++    steps:
++      - name: Use PR title
++        env:
++          TITLE: ${{ github.event.pull_request.title }}
++        run: |
++          echo "Reviewing $TITLE"
++          gh pr comment ${{ github.event.pull_request.number }} \
++            --body "Thanks for opening: ${{ github.event.pull_request.title }}"

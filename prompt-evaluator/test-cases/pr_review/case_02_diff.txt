@@ -1,0 +1,12 @@
+diff --git a/app/loader.py b/app/loader.py
+new file mode 100644
+index 0000000..2b3c4d5
+--- /dev/null
++++ b/app/loader.py
+@@ -0,0 +1,6 @@
++from pathlib import Path
++
++
++def load_profile(path: str) -> str:
++    profile_path = Path(path)
++    return profile_path.read_text(encoding="utf-8")

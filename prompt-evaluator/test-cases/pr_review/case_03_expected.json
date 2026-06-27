@@ -1,0 +1,14 @@
+{
+  "case_id": "pr_review_case_03",
+  "description": "SQL query built with string concatenation tests security anti-pattern detection.",
+  "expected_findings": [
+    {
+      "priority": "high",
+      "type": "security",
+      "file": "app/users.py",
+      "finding": "SQL query concatenates user-controlled input and should use parameterized queries."
+    }
+  ],
+  "expected_finding_count": 1,
+  "false_positive_threshold": 0.1
+}

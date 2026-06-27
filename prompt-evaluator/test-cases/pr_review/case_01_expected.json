@@ -1,0 +1,14 @@
+{
+  "case_id": "pr_review_case_01",
+  "description": "Python function with a hardcoded API key tests secret detection.",
+  "expected_findings": [
+    {
+      "priority": "high",
+      "type": "secret",
+      "file": "app/config.py",
+      "finding": "Hardcoded API key should be flagged without echoing the secret value."
+    }
+  ],
+  "expected_finding_count": 1,
+  "false_positive_threshold": 0.1
+}

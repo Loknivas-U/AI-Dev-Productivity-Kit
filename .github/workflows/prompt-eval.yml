@@ -1,0 +1,171 @@
+name: Prompt Evaluation
+
+on:
+  push:
+    paths:
+      - "prompt-library/staging/*.md"
+  pull_request:
+    paths:
+      - "prompt-library/staging/*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    outputs:
+      eval_passed: ${{ steps.eval.outputs.passed }}
+      prompt_type: ${{ steps.detect.outputs.prompt_type }}
+      compare_report_json: ${{ steps.compare-json.outputs.compare_report_json }}
+      pr_number: ${{ steps.context.outputs.pr_number }}
+      repository: ${{ github.repository }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade anthropic
+
+      - name: Detect changed staging prompt
+        id: detect
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin main
+            changed_files="$(git diff --name-only origin/main...HEAD -- 'prompt-library/staging/*.md')"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            changed_files="$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- 'prompt-library/staging/*.md' || true)"
+          else
+            changed_files="$(ls prompt-library/staging/*_candidate.md 2>/dev/null | sort | head -n 1)"
+          fi
+
+          changed_file="$(printf '%s\n' "${changed_files}" | grep -E 'prompt-library/staging/(pr_review|test_gap)_candidate\.md$' | head -n 1)"
+          if [ -z "${changed_file}" ]; then
+            echo "No staging prompt changed."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          case "${changed_file}" in
+            *pr_review_candidate.md) prompt_type="pr_review" ;;
+            *test_gap_candidate.md) prompt_type="test_gap" ;;
+            *) echo "Unsupported staging prompt: ${changed_file}" >&2; exit 1 ;;
+          esac
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "prompt_file=${changed_file}" >> "$GITHUB_OUTPUT"
+          echo "prompt_type=${prompt_type}" >> "$GITHUB_OUTPUT"
+
+      - name: Run prompt evaluator
+        id: eval
+        if: steps.detect.outputs.changed == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python prompt-evaluator/evaluate.py \
+            --prompt "${{ steps.detect.outputs.prompt_file }}" \
+            --type "${{ steps.detect.outputs.prompt_type }}" \
+            --output /tmp/eval_report.json
+
+          passed="$(python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("/tmp/eval_report.json").read_text(encoding="utf-8"))
+          print(str(report["passed"]).lower())
+          PY
+          )"
+          echo "passed=${passed}" >> "$GITHUB_OUTPUT"
+
+      - name: Run prompt comparison
+        if: steps.detect.outputs.changed == 'true'
+        run: |
+          python prompt-evaluator/compare.py \
+            --candidate-report /tmp/eval_report.json \
+            --type "${{ steps.detect.outputs.prompt_type }}" \
+            --output /tmp/compare_report.json
+
+      - name: Save timestamped eval report
+        if: steps.detect.outputs.changed == 'true'
+        run: |
+          timestamp="$(date -u +'%Y%m%dT%H%M%SZ')"
+          output_path="prompt-library/scores/${{ steps.detect.outputs.prompt_type }}_eval_${timestamp}.json"
+          cp /tmp/eval_report.json "${output_path}"
+          cp /tmp/compare_report.json "prompt-library/scores/${{ steps.detect.outputs.prompt_type }}_compare_${timestamp}.json"
+          echo "Saved ${output_path}"
+
+      - name: Upload evaluation reports
+        if: steps.detect.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: prompt-evaluation-${{ steps.detect.outputs.prompt_type }}
+          path: |
+            /tmp/eval_report.json
+            /tmp/compare_report.json
+            prompt-library/scores/${{ steps.detect.outputs.prompt_type }}_eval_*.json
+            prompt-library/scores/${{ steps.detect.outputs.prompt_type }}_compare_*.json
+
+      - name: Capture comparison JSON
+        id: compare-json
+        if: steps.detect.outputs.changed == 'true'
+        run: |
+          compact_json="$(python - <<'PY'
+          import json
+          from pathlib import Path
+
+          print(json.dumps(json.loads(Path("/tmp/compare_report.json").read_text(encoding="utf-8"))))
+          PY
+          )"
+          {
+            echo "compare_report_json<<EOF"
+            echo "${compact_json}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Capture event context
+        id: context
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "pr_number=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write push summary
+        if: steps.detect.outputs.changed == 'true' && github.event_name != 'pull_request'
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          compare = json.loads(Path("/tmp/compare_report.json").read_text(encoding="utf-8"))
+          print(f"## Prompt Evaluation Report — {compare['prompt_type']}")
+          print()
+          print(f"Candidate score: {compare['candidate_score']}")
+          print(f"Production score: {compare['production_score']}")
+          print(f"Delta: {compare['delta']}")
+          print(f"Verdict: {compare['verdict']}")
+          print()
+          print(compare["recommendation"])
+          PY
+
+  prompt-compare:
+    needs: evaluate
+    if: needs.evaluate.outputs.eval_passed == 'true'
+    uses: ./.github/workflows/prompt-compare.yml
+    with:
+      prompt_type: ${{ needs.evaluate.outputs.prompt_type }}
+      compare_report_json: ${{ needs.evaluate.outputs.compare_report_json }}
+      pr_number: ${{ needs.evaluate.outputs.pr_number }}
+      repository: ${{ needs.evaluate.outputs.repository }}
+    secrets: inherit

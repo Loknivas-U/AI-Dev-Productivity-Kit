@@ -1,0 +1,7 @@
+{
+  "case_id": "pr_review_case_04",
+  "description": "Clean Python function with tests checks false positive behavior.",
+  "expected_findings": [],
+  "expected_finding_count": 0,
+  "false_positive_threshold": 0.1
+}

@@ -1,0 +1,24 @@
+diff --git a/app/math_utils.py b/app/math_utils.py
+new file mode 100644
+index 0000000..4d5e6f7
+--- /dev/null
++++ b/app/math_utils.py
+@@ -0,0 +1,7 @@
++def normalize_score(score: float, maximum: float) -> float:
++    if maximum <= 0:
++        raise ValueError("maximum must be positive")
++    return score / maximum
+diff --git a/tests/test_math_utils.py b/tests/test_math_utils.py
+new file mode 100644
+index 0000000..5e6f7a8
+--- /dev/null
++++ b/tests/test_math_utils.py
+@@ -0,0 +1,8 @@
++import pytest
++
++from app.math_utils import normalize_score
++
++
++def test_normalize_score_rejects_non_positive_maximum():
++    with pytest.raises(ValueError):
++        normalize_score(1.0, 0.0)

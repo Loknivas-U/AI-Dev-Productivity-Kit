@@ -1,0 +1,14 @@
+{
+  "case_id": "pr_review_case_02",
+  "description": "Missing try/except around file reading tests error handling detection.",
+  "expected_findings": [
+    {
+      "priority": "medium",
+      "type": "error-handling",
+      "file": "app/loader.py",
+      "finding": "File read can raise OSError and should be handled or surfaced with a meaningful error."
+    }
+  ],
+  "expected_finding_count": 1,
+  "false_positive_threshold": 0.1
+}

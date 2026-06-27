@@ -1,0 +1,14 @@
+{
+  "case_id": "pr_review_case_05",
+  "description": "YAML workflow using pull_request_target with unsanitized PR input tests workflow security detection.",
+  "expected_findings": [
+    {
+      "priority": "high",
+      "type": "security",
+      "file": ".github/workflows/comment.yml",
+      "finding": "pull_request_target combined with unsanitized pull request title interpolation can expose privileged workflow context to injection risk."
+    }
+  ],
+  "expected_finding_count": 1,
+  "false_positive_threshold": 0.1
+}

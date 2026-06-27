@@ -1,0 +1,14 @@
+{
+  "case_id": "test_gap_case_05",
+  "description": "Python file adds three functions and tests two of them.",
+  "expected_findings": [
+    {
+      "priority": "medium",
+      "type": "test-gap",
+      "file": "app/strings.py",
+      "finding": "Candidate gap: reverse has no corresponding test in the diff."
+    }
+  ],
+  "expected_finding_count": 1,
+  "false_positive_threshold": 0.1
+}

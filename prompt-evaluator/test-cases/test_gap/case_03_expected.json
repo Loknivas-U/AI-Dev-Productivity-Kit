@@ -1,0 +1,14 @@
+{
+  "case_id": "test_gap_case_03",
+  "description": "JavaScript file adds an async function with no Jest test in the diff.",
+  "expected_findings": [
+    {
+      "priority": "medium",
+      "type": "test-gap",
+      "file": "src/api.js",
+      "finding": "Candidate gap: fetchUser has no corresponding Jest test in the diff."
+    }
+  ],
+  "expected_finding_count": 1,
+  "false_positive_threshold": 0.1
+}

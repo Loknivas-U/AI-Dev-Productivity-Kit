@@ -1,0 +1,12 @@
+diff --git a/app/calculations.py b/app/calculations.py
+new file mode 100644
+index 0000000..7a8b9c0
+--- /dev/null
++++ b/app/calculations.py
+@@ -0,0 +1,6 @@
++def add_tax(amount: float, rate: float) -> float:
++    return amount * (1 + rate)
++
++
++def apply_discount(amount: float, discount: float) -> float:
++    return amount - discount
