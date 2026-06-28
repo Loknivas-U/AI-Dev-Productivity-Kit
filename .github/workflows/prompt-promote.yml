@@ -22,6 +22,8 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
+  issues: write
 
 jobs:
   promote:
@@ -49,6 +51,16 @@ jobs:
             --type "${{ inputs.prompt_type }}" \
             --version "${{ inputs.new_version }}"
 
+      - name: Create promotion branch
+        if: inputs.confirm == true
+        env:
+          PROMPT_TYPE: ${{ inputs.prompt_type }}
+          NEW_VERSION: ${{ inputs.new_version }}
+        run: |
+          branch_name="promote/${PROMPT_TYPE}-v${NEW_VERSION}"
+          git checkout -b "${branch_name}"
+          echo "PROMOTION_BRANCH=${branch_name}" >> "$GITHUB_ENV"
+
       - name: Promote prompt
         if: inputs.confirm == true
         run: |
@@ -57,15 +69,93 @@ jobs:
             --version "${{ inputs.new_version }}" \
             --confirm
 
-      - name: Commit promotion
+      - name: Stage promotion changes
+        id: promotion-changes
         if: inputs.confirm == true
         run: |
           git add prompt-library
           if git diff --cached --quiet; then
             echo "No promotion changes to commit."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+
+      - name: Commit promotion
+        if: inputs.confirm == true && steps.promotion-changes.outputs.has_changes == 'true'
+        run: |
           git -c user.name="github-actions[bot]" \
             -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -m "chore: promote ${{ inputs.prompt_type }} prompt to v${{ inputs.new_version }}"
-          git push
+
+      - name: Push promotion branch
+        if: inputs.confirm == true && steps.promotion-changes.outputs.has_changes == 'true'
+        run: git push -u origin "${PROMOTION_BRANCH}"
+
+      - name: Open promotion PR
+        if: inputs.confirm == true && steps.promotion-changes.outputs.has_changes == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          PROMPT_TYPE: ${{ inputs.prompt_type }}
+          NEW_VERSION: ${{ inputs.new_version }}
+        run: |
+          pr_payload="$(python - <<'PY'
+          import json
+          import os
+
+          prompt_type = os.environ["PROMPT_TYPE"]
+          version = os.environ["NEW_VERSION"]
+          branch = os.environ["PROMOTION_BRANCH"]
+          title = f"chore: promote {prompt_type} prompt to v{version}"
+          print(json.dumps({
+              "title": title,
+              "head": branch,
+              "base": "main",
+              "body": "Promotes the staged prompt candidate to production. Human review and merge required.",
+          }))
+          PY
+          )"
+
+          response_file="$(mktemp)"
+          curl --fail-with-body \
+            -X POST \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPOSITORY}/pulls" \
+            -d "${pr_payload}" \
+            -o "${response_file}"
+
+          pr_number="$(python - "${response_file}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          print(json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))["number"])
+          PY
+          )"
+          echo "PROMOTION_PR_NUMBER=${pr_number}" >> "$GITHUB_ENV"
+
+      - name: Comment on promotion PR
+        if: inputs.confirm == true && steps.promotion-changes.outputs.has_changes == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          payload="$(python - <<'PY'
+          import json
+
+          print(json.dumps({
+              "body": "Promotion ready for merge. Triggered by manual workflow_dispatch."
+          }))
+          PY
+          )"
+
+          curl --fail-with-body \
+            -X POST \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPOSITORY}/issues/${PROMOTION_PR_NUMBER}/comments" \
+            -d "${payload}"
