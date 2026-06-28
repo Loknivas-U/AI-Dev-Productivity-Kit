@@ -57,9 +57,8 @@ jobs:
           PROMPT_TYPE: ${{ inputs.prompt_type }}
           NEW_VERSION: ${{ inputs.new_version }}
         run: |
-          branch_name="promote/${PROMPT_TYPE}-v${NEW_VERSION}"
-          git checkout -b "${branch_name}"
-          echo "PROMOTION_BRANCH=${branch_name}" >> "$GITHUB_ENV"
+          git checkout -b "promote/${PROMPT_TYPE}-v${NEW_VERSION}"
+          echo "PROMOTION_BRANCH=promote/${PROMPT_TYPE}-v${NEW_VERSION}" >> "$GITHUB_ENV"
 
       - name: Promote prompt
         if: inputs.confirm == true
@@ -69,31 +68,20 @@ jobs:
             --version "${{ inputs.new_version }}" \
             --confirm
 
-      - name: Stage promotion changes
-        id: promotion-changes
+      - name: Stage and commit
         if: inputs.confirm == true
         run: |
           git add prompt-library
-          if git diff --cached --quiet; then
-            echo "No promotion changes to commit."
-            echo "has_changes=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "has_changes=true" >> "$GITHUB_OUTPUT"
-
-      - name: Commit promotion
-        if: inputs.confirm == true && steps.promotion-changes.outputs.has_changes == 'true'
-        run: |
           git -c user.name="github-actions[bot]" \
             -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -m "chore: promote ${{ inputs.prompt_type }} prompt to v${{ inputs.new_version }}"
 
       - name: Push promotion branch
-        if: inputs.confirm == true && steps.promotion-changes.outputs.has_changes == 'true'
+        if: inputs.confirm == true
         run: git push -u origin "${PROMOTION_BRANCH}"
 
       - name: Open promotion PR
-        if: inputs.confirm == true && steps.promotion-changes.outputs.has_changes == 'true'
+        if: inputs.confirm == true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOSITORY: ${{ github.repository }}
@@ -138,7 +126,7 @@ jobs:
           echo "PROMOTION_PR_NUMBER=${pr_number}" >> "$GITHUB_ENV"
 
       - name: Comment on promotion PR
-        if: inputs.confirm == true && steps.promotion-changes.outputs.has_changes == 'true'
+        if: inputs.confirm == true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOSITORY: ${{ github.repository }}
