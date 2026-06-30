@@ -88,26 +88,50 @@ def latest_eval_report(prompt_type: str) -> dict[str, Any] | None:
     return None
 
 
+def validated_eval_report(prompt_type: str) -> dict[str, Any]:
+    eval_report = latest_eval_report(prompt_type)
+    if not eval_report:
+        raise RuntimeError(
+            f"No evaluation report found for {prompt_type}. Run evaluate.py first and save "
+            f"the report under prompt-library/scores/{prompt_type}_eval_<timestamp>.json."
+        )
+
+    score = eval_report.get("composite_score")
+    iterations = eval_report.get("iterations")
+    metrics = eval_report.get("metrics")
+    candidate_prompt_file = eval_report.get("candidate_prompt_file")
+    expected_staging_path = STAGING_PATHS[prompt_type]
+    candidate_path = Path(candidate_prompt_file) if candidate_prompt_file else None
+
+    if not isinstance(score, (int, float)):
+        raise RuntimeError(f"Evaluation report for {prompt_type} is missing a numeric composite_score.")
+    if not isinstance(iterations, int) or iterations <= 0:
+        raise RuntimeError(f"Evaluation report for {prompt_type} is missing a positive iterations count.")
+    if not isinstance(metrics, dict):
+        raise RuntimeError(f"Evaluation report for {prompt_type} is missing metrics.")
+    if not candidate_path or candidate_path.name != expected_staging_path.name:
+        raise RuntimeError(
+            f"Evaluation report for {prompt_type} does not reference the expected staging prompt "
+            f"{expected_staging_path.relative_to(ROOT_DIR)}."
+        )
+
+    return eval_report
+
+
 def build_new_entry(
     prompt_type: str,
     version: str,
     production_file: Path,
     old_entry: dict[str, Any],
 ) -> dict[str, Any]:
-    eval_report = latest_eval_report(prompt_type)
+    eval_report = validated_eval_report(prompt_type)
     version_id = version.replace(".", "_")
-    if eval_report:
-        score = eval_report.get("composite_score")
-        metrics = eval_report.get("metrics", {})
-        reasoning = eval_report.get("reasoning", "")
-        eval_date = eval_report.get("eval_date", date.today().isoformat())
-        eval_set_size = eval_report.get("test_cases_run")
-    else:
-        score = old_entry.get("score")
-        metrics = old_entry.get("metrics", {})
-        reasoning = "Promoted from staging by human workflow; no timestamped eval report was found."
-        eval_date = date.today().isoformat()
-        eval_set_size = old_entry.get("eval_set_size")
+    score = eval_report["composite_score"]
+    metrics = eval_report["metrics"]
+    reasoning = eval_report.get("reasoning", "")
+    eval_date = eval_report.get("eval_date", date.today().isoformat())
+    eval_set_size = eval_report.get("test_cases_run")
+    iterations = eval_report["iterations"]
 
     return {
         "id": f"{prompt_type}_v{version_id}",
@@ -116,7 +140,7 @@ def build_new_entry(
         "score": score,
         "eval_date": eval_date,
         "eval_set_size": eval_set_size,
-        "iterations": None,
+        "iterations": iterations,
         "metrics": metrics,
         "specificity": metrics.get("specificity"),
         "consistency": metrics.get("consistency"),
@@ -138,6 +162,7 @@ def promote_prompt(prompt_type: str, version: str) -> None:
     if not staging_file.exists():
         raise RuntimeError(f"Staging prompt does not exist: {staging_file}")
 
+    new_entry = build_new_entry(prompt_type, version, production_file, current_entry)
     archive_file = archive_path_for(production_file, str(current_entry.get("version", "unknown")))
     archive_file.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(production_file, archive_file)
@@ -145,9 +170,7 @@ def promote_prompt(prompt_type: str, version: str) -> None:
 
     current_entry["status"] = "archived"
     current_entry["archived_file"] = str(archive_file.relative_to(ROOT_DIR))
-    scores.setdefault("prompts", []).append(
-        build_new_entry(prompt_type, version, production_file, current_entry)
-    )
+    scores.setdefault("prompts", []).append(new_entry)
     write_json_file(SCORES_PATH, scores)
 
 

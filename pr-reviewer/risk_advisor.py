@@ -4,6 +4,20 @@ from __future__ import annotations
 
 
 HIGH_PRIORITY_HEADING = "High Priority"
+EMPTY_FINDING_MARKERS = (
+    "none",
+    "none.",
+    "no high priority issue",
+    "no high-priority issue",
+    "no high priority finding",
+    "no high-priority finding",
+    "no critical issue",
+)
+
+
+def _is_empty_finding_marker(text: str) -> bool:
+    normalized = text.strip().lower().rstrip(".")
+    return any(normalized == marker.rstrip(".") or normalized.startswith(marker) for marker in EMPTY_FINDING_MARKERS)
 
 
 def parse_high_priority_findings(review_text: str) -> list[str]:
@@ -26,13 +40,17 @@ def parse_high_priority_findings(review_text: str) -> list[str]:
         if not in_high_priority_section:
             continue
 
-        if not stripped or stripped == "None.":
+        if not stripped or _is_empty_finding_marker(stripped):
             continue
 
         if stripped.startswith(("- ", "* ")):
+            bullet_text = stripped[2:].strip()
+            if _is_empty_finding_marker(bullet_text):
+                current_finding = None
+                continue
             if current_finding:
                 findings.append(current_finding)
-            current_finding = stripped[2:].strip()
+            current_finding = bullet_text
             continue
 
         if current_finding:

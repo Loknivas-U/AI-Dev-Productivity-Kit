@@ -46,6 +46,10 @@ Automated prompt evaluation is still an approximation. The critic model may over
 
 Add new cases under `prompt-evaluator/test-cases/pr_review/` or `prompt-evaluator/test-cases/test_gap/`. Each case needs a `case_NN_diff.txt` unified diff and a matching `case_NN_expected.json` file with `case_id`, `description`, `expected_findings`, `expected_finding_count`, and `false_positive_threshold`. Keep cases focused on one primary behavior so regressions are easy to diagnose. When adding enough new cases to change baseline interpretation, update `prompt-library/scores/eval_results.json` metadata after a human review.
 
+## Promotion Data Contract
+
+Prompt promotion requires a saved evaluation report for the same prompt type and staging candidate file. The report must include a numeric `composite_score`, a `metrics` object, and a positive integer `iterations` count from `evaluate.py`. If no matching report exists under `prompt-library/scores/`, `promote.py` refuses to promote and asks the user to run evaluation first.
+
 ## Estimated Cost Per Evaluation Run
 
 Each evaluation run sends one candidate prompt, one diff, and one expected-findings file for each of five cases. A typical run is expected to use roughly 20k to 35k input tokens and 4k to 8k output tokens, depending on prompt length and evaluator reasoning. Actual cost depends on the Anthropic pricing in effect for `claude-sonnet-4-6` at runtime.

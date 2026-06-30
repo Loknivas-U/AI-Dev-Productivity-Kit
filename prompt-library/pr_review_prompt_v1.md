@@ -1,4 +1,6 @@
 ---
+<!-- PRODUCTION: Active PR review prompt. Propose changes through prompt-library/staging/ and prompt-evaluator/ instead of editing this file directly. -->
+
 # PR Review Prompt — v1.0
 **SkillOpt Score:** 0.81
 **Evaluated on:** 12 synthetic PR diffs (mix of Python, JS, YAML)

@@ -250,6 +250,7 @@ def main() -> int:
             "per_case_scores": per_case_scores,
             "test_cases_run": len(test_cases),
             "test_cases_passed": aggregate["test_cases_passed"],
+            "iterations": len(per_case_scores),
         }
         write_json_file(output_path, report)
     except RuntimeError as exc:
