@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
@@ -96,13 +96,54 @@ jobs:
             --output /tmp/compare_report.json
 
       - name: Save timestamped eval report
+        id: save-report
         if: steps.detect.outputs.changed == 'true'
         run: |
           timestamp="$(date -u +'%Y%m%dT%H%M%SZ')"
-          output_path="prompt-library/scores/${{ steps.detect.outputs.prompt_type }}_eval_${timestamp}.json"
-          cp /tmp/eval_report.json "${output_path}"
-          cp /tmp/compare_report.json "prompt-library/scores/${{ steps.detect.outputs.prompt_type }}_compare_${timestamp}.json"
-          echo "Saved ${output_path}"
+          eval_report_path="prompt-library/scores/${{ steps.detect.outputs.prompt_type }}_eval_${timestamp}.json"
+          compare_report_path="prompt-library/scores/${{ steps.detect.outputs.prompt_type }}_compare_${timestamp}.json"
+          cp /tmp/eval_report.json "${eval_report_path}"
+          cp /tmp/compare_report.json "${compare_report_path}"
+          echo "eval_report_path=${eval_report_path}" >> "$GITHUB_OUTPUT"
+          echo "compare_report_path=${compare_report_path}" >> "$GITHUB_OUTPUT"
+          echo "Saved ${eval_report_path}"
+
+      - name: Commit evaluation reports
+        if: steps.detect.outputs.changed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVAL_REPORT_PATH: ${{ steps.save-report.outputs.eval_report_path }}
+          COMPARE_REPORT_PATH: ${{ steps.save-report.outputs.compare_report_path }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            target_repo="${{ github.event.pull_request.head.repo.full_name }}"
+            target_branch="${{ github.event.pull_request.head.ref }}"
+
+            if [ "${target_repo}" != "${{ github.repository }}" ]; then
+              echo "Skipping commit for forked pull request ${target_repo}:${target_branch}; GITHUB_TOKEN cannot push to the fork head branch."
+              exit 0
+            fi
+
+            git fetch origin "${target_branch}"
+            git switch -C "${target_branch}" FETCH_HEAD
+            cp /tmp/eval_report.json "${EVAL_REPORT_PATH}"
+            cp /tmp/compare_report.json "${COMPARE_REPORT_PATH}"
+          else
+            target_repo="${{ github.repository }}"
+            target_branch="${GITHUB_REF_NAME}"
+          fi
+
+          git add "${EVAL_REPORT_PATH}" "${COMPARE_REPORT_PATH}"
+          if git diff --cached --quiet; then
+            echo "No evaluation reports changed; skipping commit."
+            exit 0
+          fi
+
+          git commit -m "chore: save eval report for ${{ steps.detect.outputs.prompt_type }}"
+          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${target_repo}.git" "HEAD:${target_branch}"
 
       - name: Upload evaluation reports
         if: steps.detect.outputs.changed == 'true'
