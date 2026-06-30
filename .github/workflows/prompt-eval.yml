@@ -111,7 +111,7 @@ jobs:
       - name: Commit evaluation reports
         if: steps.detect.outputs.changed == 'true'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           EVAL_REPORT_PATH: ${{ steps.save-report.outputs.eval_report_path }}
           COMPARE_REPORT_PATH: ${{ steps.save-report.outputs.compare_report_path }}
         run: |
