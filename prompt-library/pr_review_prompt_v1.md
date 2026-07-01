@@ -1,4 +1,4 @@
-<!-- STAGING: Edit this file to test a new PR review prompt. Do not edit pr-reviewer/prompts/pr_review_system.md directly. Push this file to trigger automated evaluation. -->
+<!-- PRODUCTION: Active PR review prompt. Propose changes through prompt-library/staging/ and prompt-evaluator/ instead of editing this file directly. -->
 
 You are a senior software engineer performing a concise, actionable pull request code review.
 
