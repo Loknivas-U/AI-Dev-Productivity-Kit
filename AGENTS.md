@@ -78,6 +78,9 @@ ai-dev-productivity-kit/
 │       └── prompt-promote.yml       ← Human-triggered prompt promotion workflow
 ├── pr-reviewer/
 │   ├── review.py                    ← Main PR review script
+│   ├── risk_advisor.py              ← Parses High priority findings for merge risk advisory
+│   ├── post_advisory.py             ← Posts merge risk advisory comment to PR
+│   ├── test_risk_advisor.py         ← Unit tests for risk advisory parsing
 │   └── prompts/
 │       └── pr_review_system.md      ← System prompt for PR review agent
 ├── test-gap-detector/
@@ -103,7 +106,9 @@ ai-dev-productivity-kit/
     ├── failed/                      ← Failed candidate prompt records
     ├── passed-not-promoted/         ← Passing candidates awaiting human decision
     └── scores/
-        └── eval_results.json        ← SkillOpt and evaluator scores
+        ├── eval_results.json        ← SkillOpt and evaluator scores
+        ├── pr_review_eval_<timestamp>.json     ← Timestamped eval report (committed by eval workflow)
+        └── pr_review_compare_<timestamp>.json  ← Timestamped compare report (committed by eval workflow)
 ```
 
 When you encounter a path not listed above, do not assume it is safe to modify.
@@ -115,11 +120,11 @@ Ask the human engineer for guidance.
 
 ### Layer 2 — PR Reviewer (`pr-reviewer/`)
 
-**Trigger:** GitHub Actions on `pull_request` event (types: `opened`, `synchronize`).
+**Trigger:** GitHub Actions on `pull_request` event (types: `opened`, `synchronize`), plus `workflow_dispatch`.
 
 **Input scope:** The unified diff of the PR (`git diff base...head`). Nothing outside the diff.
 
-**Output scope:** A single structured comment posted to the PR via the GitHub API.
+**Output scope:** Two PR comments posted via the GitHub API: the review comment and a Merge Risk Advisory (only posted when High priority findings exist).
 
 **What to review:**
 - Logic errors and obvious bugs
@@ -135,32 +140,28 @@ Ask the human engineer for guidance.
 
 ### Layer 3 — Test Gap Detector (`test-gap-detector/`)
 
-**Trigger:** GitHub Actions on `pull_request` event, runs after PR Reviewer.
+**Trigger:** GitHub Actions on `pull_request` event; runs in parallel with PR Reviewer on the same PR trigger.
 
 **Input scope:** The unified diff. Specifically: new or modified function/method definitions.
 
 **Output scope:** A structured list of functions that appear to lack test coverage in the diff.
 
-**Detection logic:**
-1. Extract function signatures added or modified in the diff.
-2. Search the diff for corresponding test function names (e.g., `test_<function_name>`, `it('should...')`, `describe('<function_name>')`).
-3. If no test is found in the diff, flag the function as a gap candidate.
-4. Do not assert a gap if the PR description explicitly notes tests exist elsewhere.
+**Detection logic:** LLM-driven analysis via system prompt in `test_gap_system.md`. The prompt instructs the model to identify new or modified functions, search the diff for corresponding test patterns (e.g., `test_<function_name>`, `it('should...')`, `describe('<function_name>')`), flag gaps as candidates when no test appears in the diff, and note caveats when the PR description indicates tests exist elsewhere.
 
 **False positive protocol:** Clearly mark every flagged item as a _candidate_ gap, not a confirmed defect.
 
 ### Layer 4 — Prompt Library (`prompt-library/`)
 
 **Read-only for agents.** You may reference these prompts but must not modify them.
-Prompt scoring and updates are performed by human maintainers using the SkillOpt evaluation method.
+Prompt scoring is automated via `evaluate.py`; humans control promotion, not the scoring run.
 
 ### Layer 5 — Prompt Evaluator (`prompt-evaluator/`)
 
-**Trigger:** Pushes that change `prompt-library/staging/*.md`, plus manual `workflow_dispatch` runs.
+**Trigger:** Pushes that change `prompt-library/staging/*.md`, plus manual `workflow_dispatch` runs; also fires on `pull_request` when `staging/*.md` changes.
 
 **Input scope:** The staged prompt candidate file and the curated test cases under `prompt-evaluator/test-cases/`.
 
-**Output scope:** Evaluation report JSON files under `prompt-library/scores/` and a structured PR comment or workflow summary with the comparison against production.
+**Output scope:** Evaluation report JSON files under `prompt-library/scores/` and a structured PR comment or workflow summary with the comparison against production. The eval workflow commits and pushes timestamped score files (`pr_review_eval_<timestamp>.json`, `pr_review_compare_<timestamp>.json`) back to the branch using `PAT_TOKEN`. `promote.py` requires a committed eval report to exist under `prompt-library/scores/` before promotion is allowed.
 
 **Promotion boundary:** The evaluator never modifies production prompts automatically. `promote.py` requires the explicit `--confirm` flag, and the promotion workflow must be human-triggered through `workflow_dispatch`.
 
@@ -261,10 +262,11 @@ This file is versioned alongside the repository. When behavioral rules change:
 - Add a changelog entry.
 - Agents should log which version of `AGENTS.md` they loaded when producing output.
 
-**Current version:** `1.1.0`
+**Current version:** `1.2.0`
 
 | Version | Date | Change |
 |---|---|---|
+| 1.2.0 | 2026-06-30 | Updated Layer 2 advisory stack, Layer 3 detection model, Layer 5 eval persistence requirement and PAT_TOKEN push. Corrected Layer 3 trigger ordering. Added timestamped score artifacts to tree. |
 | 1.1.0 | 2026-06-27 | Added Layer 5 prompt evaluator structure, scope boundaries, and promotion safety rules |
 | 1.0.0 | 2026-06-25 | Initial release — 4-layer architecture, full behavioral rules |
 
